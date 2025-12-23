@@ -139,3 +139,15 @@ All data is packed directly into Albedo and Normal textures:
 - A = Metallic or Emission
 
 ---
+
+## Installation
+The recommended way to install the package is through the package manager in Unity (UPM). Before installing, make sure that URP is installed and correctly set up in your project. Then you can proceed to install this package:
+
+- Inside Unity, go to "Window"=> "Package Manager".
+
+- Once the window is opened, go to the "+" symbol at the top left corner, and select "Install package from git URL". See the image below.
+Install
+
+![Package Manger](Images/Manager.png)
+
+- Write the following URL: https://github.com/Woolction/Texture-Packer.git and click install.
