@@ -150,4 +150,12 @@ Install
 
 ![Package Manger](Images/Manager.png)
 
+---
+
 - Write the following URL: https://github.com/Woolction/Texture-Packer.git and click install.
+
+### Shader Location
+
+If you install the plugin using Package Manager, then you can find Shader in the Shaders tab => CustomPBR
+
+![Shader Location](Images/ShaderLocation.png)
