@@ -1,0 +1,5 @@
+{
+    "name": "TexturePacker.Editor",
+    "rootNamespace": "Woolction.TexturePacker",
+    "includePlatforms": ["Editor"]
+}

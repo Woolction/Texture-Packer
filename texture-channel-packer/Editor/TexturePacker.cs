@@ -1,408 +1,410 @@
 #if UNITY_EDITOR
 
-using UnityEngine;
-using UnityEditor;
-using System.IO;
-using System.Collections.Generic;
-
-enum TargetChannel { R, G, B, A }
-public class TexturePacker : EditorWindow
+namespace Woolction.TexturePacker
 {
-    enum ChannelSource { RGB, Red, Green, Blue, Alpha, Mask, Color }
-    enum CreateType { Default, InverseRNS }
+    using UnityEngine;
+    using UnityEditor;
+    using System.IO;
+    using System.Collections.Generic;
 
-    class Slot
+    enum TargetChannel { R, G, B, A }
+    public class TexturePacker : EditorWindow
     {
-        public bool enabled = true;
-        public Texture2D texture = null;
-        public TargetChannel target = TargetChannel.R;
-        public ChannelSource source = ChannelSource.Red;
-        public CreateType createType = CreateType.Default;
-        public Color color;
-        public string label = "Slot";
-    }
+        enum ChannelSource { RGB, Red, Green, Blue, Alpha, Mask, Color }
+        enum CreateType { Default, InverseRNS }
 
-    struct TextureSettings
-    {
-        public TextureImporter textureImporter;
-
-        //settings
-        public int maxTextureSize;
-        public TextureImporterAlphaSource alphaSource;
-        public TextureImporterCompression compression;
-        public TextureImporterType textureType;   
-    }
-
-    private Slot[] slots = new Slot[4];
-    private List<TextureSettings> textures = new();
-    private string outputFolderRelative = "Assets";
-    private string outputFilename = "PackedTexture.png";
-    private int outputSize = 2048;
-    private bool forceReadableTextures = true;
-    private bool overwriteExisting = true;
-    private bool autoFormating = true;
-    private bool sRGB = false;
-    private TextureFormat format = TextureFormat.RGBA32;
-
-    [MenuItem("Tools/Texture Packer")]
-    public static void OpenWindow()
-    {
-        var w = GetWindow<TexturePacker>("Texture Packer");
-        w.minSize = new Vector2(520, 480);
-        w.maxSize = new Vector2(520, 480);
-    }
-
-    void OnEnable()
-    {
-        for (int i = 0; i < 4; i++)
+        class Slot
         {
-            if (slots[i] == null)
-                slots[i] = new Slot() { label = $"Slot {i+1}", target = (TargetChannel)i };
+            public bool enabled = true;
+            public Texture2D texture = null;
+            public TargetChannel target = TargetChannel.R;
+            public ChannelSource source = ChannelSource.Red;
+            public CreateType createType = CreateType.Default;
+            public Color color;
+            public string label = "Slot";
         }
-    }
 
-    void OnGUI()
-    {
-        EditorGUILayout.LabelField("Packed Texture Packer", EditorStyles.boldLabel);
-        EditorGUILayout.Space();
-
-        for (int i = 0; i < 4; i++)
+        struct TextureSettings
         {
-            var s = slots[i];
+            public TextureImporter textureImporter;
 
-            EditorGUILayout.BeginVertical("box");
-            EditorGUILayout.BeginHorizontal();
-            s.enabled = EditorGUILayout.Toggle(s.enabled, GUILayout.Width(18));
-            s.label = EditorGUILayout.TextField(s.label, GUILayout.Width(120));
-            s.texture = (Texture2D)EditorGUILayout.ObjectField(s.texture, typeof(Texture2D), false);
-            EditorGUILayout.EndHorizontal();
+            //settings
+            public int maxTextureSize;
+            public TextureImporterAlphaSource alphaSource;
+            public TextureImporterCompression compression;
+            public TextureImporterType textureType;   
+        }
 
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Target", GUILayout.Width(50));
-            s.target = (TargetChannel)EditorGUILayout.EnumPopup(s.target, GUILayout.Width(100));
+        private Slot[] slots = new Slot[4];
+        private List<TextureSettings> textures = new();
+        private string outputFolderRelative = "Assets";
+        private string outputFilename = "PackedTexture.png";
+        private int outputSize = 2048;
+        private bool forceReadableTextures = true;
+        private bool overwriteExisting = true;
+        private bool autoFormating = true;
+        private bool sRGB = false;
+        private TextureFormat format = TextureFormat.RGBA32;
 
-            GUILayout.FlexibleSpace();
+        [MenuItem("Tools/Texture Packer")]
+        public static void OpenWindow()
+        {
+            var w = GetWindow<TexturePacker>("Texture Packer");
+            w.minSize = new Vector2(520, 480);
+            w.maxSize = new Vector2(520, 480);
+        }
 
-            GUILayout.Label("Source", GUILayout.Width(50));
-            if (s.source == ChannelSource.Color)
+        void OnEnable()
+        {
+            for (int i = 0; i < 4; i++)
             {
-                var rect = EditorGUILayout.GetControlRect(GUILayout.Width(60));
-                s.color = EditorGUI.ColorField(rect, GUIContent.none, s.color, false, false, false);
+                if (slots[i] == null)
+                    slots[i] = new Slot() { label = $"Slot {i+1}", target = (TargetChannel)i };
             }
+        }
 
-            s.source = (ChannelSource)EditorGUILayout.EnumPopup(s.source, GUILayout.Width(100));
-
-            GUILayout.Label("Type", GUILayout.Width(40));
-            s.createType = (CreateType)EditorGUILayout.EnumPopup(s.createType, GUILayout.Width(80));
-
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.EndVertical();
+        void OnGUI()
+        {
+            EditorGUILayout.LabelField("Packed Texture Packer", EditorStyles.boldLabel);
             EditorGUILayout.Space();
-        }
 
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Output settings", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Output folder (inside Assets):", GUILayout.Width(200));
-        outputFolderRelative = EditorGUILayout.TextField(outputFolderRelative);
-
-        if (GUILayout.Button("Browse", GUILayout.Width(80)))
-        {
-            string abs = EditorUtility.OpenFolderPanel("Select output folder (choose a folder inside your project Assets)", Application.dataPath, "");
-            
-            if (!string.IsNullOrEmpty(abs))
+            for (int i = 0; i < 4; i++)
             {
-                if (abs.StartsWith(Application.dataPath))
+                var s = slots[i];
+
+                EditorGUILayout.BeginVertical("box");
+                EditorGUILayout.BeginHorizontal();
+                s.enabled = EditorGUILayout.Toggle(s.enabled, GUILayout.Width(18));
+                s.label = EditorGUILayout.TextField(s.label, GUILayout.Width(120));
+                s.texture = (Texture2D)EditorGUILayout.ObjectField(s.texture, typeof(Texture2D), false);
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Target", GUILayout.Width(50));
+                s.target = (TargetChannel)EditorGUILayout.EnumPopup(s.target, GUILayout.Width(100));
+
+                GUILayout.FlexibleSpace();
+
+                GUILayout.Label("Source", GUILayout.Width(50));
+                if (s.source == ChannelSource.Color)
                 {
-                    outputFolderRelative = "Assets" + abs.Substring(Application.dataPath.Length);
+                    var rect = EditorGUILayout.GetControlRect(GUILayout.Width(60));
+                    s.color = EditorGUI.ColorField(rect, GUIContent.none, s.color, false, false, false);
                 }
-                else
-                {
-                    EditorUtility.DisplayDialog("Invalid folder", "Please select a folder inside this Unity project's Assets folder.", "OK");
-                }
+
+                s.source = (ChannelSource)EditorGUILayout.EnumPopup(s.source, GUILayout.Width(100));
+
+                GUILayout.Label("Type", GUILayout.Width(40));
+                s.createType = (CreateType)EditorGUILayout.EnumPopup(s.createType, GUILayout.Width(80));
+
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.Space();
             }
-        }
-        EditorGUILayout.EndHorizontal();
 
-        outputFilename = EditorGUILayout.TextField("Output filename", outputFilename);
-        EditorGUILayout.BeginHorizontal();
-        outputSize = EditorGUILayout.IntField("Size", outputSize);
-        EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Output settings", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Output folder (inside Assets):", GUILayout.Width(200));
+            outputFolderRelative = EditorGUILayout.TextField(outputFolderRelative);
 
-        format = (TextureFormat)EditorGUILayout.EnumPopup("Texture write format", format, GUILayout.Width(275));
-
-        //forceReadableTextures = EditorGUILayout.Toggle("Auto set textures readable", forceReadableTextures);
-        overwriteExisting = EditorGUILayout.Toggle("Overwrite existing file", overwriteExisting);
-        autoFormating = EditorGUILayout.Toggle("Auto Texture Formating", autoFormating);
-        sRGB = EditorGUILayout.Toggle("Enabling sRGB", sRGB);
-        
-
-        EditorGUILayout.Space();
-
-        if (GUILayout.Button("Pack and Save", GUILayout.Height(36)))
-        {
-            PackAndSave();
-        }
-    }
-
-    void PackAndSave()
-    {
-        if (string.IsNullOrEmpty(outputFolderRelative) || !outputFolderRelative.StartsWith("Assets"))
-        {
-            EditorUtility.DisplayDialog("Output folder error", "Please set an output folder inside the project's Assets folder.", "OK");
-            return;
-        }
-        if (string.IsNullOrEmpty(outputFilename))
-        {
-            EditorUtility.DisplayDialog("Filename error", "Please set a valid output filename (e.g. Packed.png).", "OK");
-            return;
-        }
-
-        string fullPath = Path.Combine(Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length), outputFolderRelative, outputFilename);
-        string assetRelativePath = Path.Combine(outputFolderRelative, outputFilename).Replace("\\","/");
-
-        if (File.Exists(fullPath) && !overwriteExisting)
-        {
-            if (!EditorUtility.DisplayDialog("File exists", "File already exists. Overwrite?", "Yes", "No"))
-                return;
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            var t = slots[i].texture;
-
-            if (t == null || !slots[i].enabled)
-                continue;
-                
-            if (forceReadableTextures)
+            if (GUILayout.Button("Browse", GUILayout.Width(80)))
             {
-                string texPath = AssetDatabase.GetAssetPath(t);
+                string abs = EditorUtility.OpenFolderPanel("Select output folder (choose a folder inside your project Assets)", Application.dataPath, "");
 
-                if (!string.IsNullOrEmpty(texPath))
+                if (!string.IsNullOrEmpty(abs))
                 {
-                    var importer = AssetImporter.GetAtPath(texPath) as TextureImporter;
-
-                    if (importer != null)
+                    if (abs.StartsWith(Application.dataPath))
                     {
-                        if (!importer.isReadable)
-                        {
-                            importer.isReadable = true;
-                        }
-
-                        textures.Add(new TextureSettings()
-                        {
-                            textureImporter = importer,
-
-                            maxTextureSize = importer.maxTextureSize,
-                            compression = importer.textureCompression,
-                            alphaSource = importer.alphaSource,
-                            textureType = importer.textureType
-                        });
-
-                        importer.maxTextureSize = outputSize; 
-
-                        importer.textureCompression = TextureImporterCompression.Uncompressed;
-                        importer.alphaSource = TextureImporterAlphaSource.FromInput;
-                        importer.textureType = TextureImporterType.Default;
-
-                        importer.SaveAndReimport();
-                    }
-                }
-            }
-        }
-
-        Texture2D outTex = new Texture2D(outputSize, outputSize, format, false);
-
-        for (int y = 0; y < outputSize; y++)
-        {
-            for (int x = 0; x < outputSize; x++)
-            {
-                Color outC = new Color(0,0,0,1);
-                float u = (outputSize > 1) ? (float)x / (outputSize - 1) : 0f;
-                float v = (outputSize > 1) ? (float)y / (outputSize - 1) : 0f;
-
-                for (int sIndex = 0; sIndex < 4; sIndex++)
-                {
-                    var s = slots[sIndex];
-
-                    if (!s.enabled || s.texture == null) 
-                        continue;
-
-                    Texture2D tex = s.texture;
-
-                    Color sample = SampleTextureNormalized(tex, u, v);
-
-                    float val = 0;
-                    Color solidColor = new();
-
-                    switch (s.source)
-                    {
-                        case ChannelSource.RGB:
-                            val = Mathf.Max(sample.r + sample.g + sample.b);
-                            break;
-                        case ChannelSource.Red:
-                            val = sample.r;
-                            break;
-                        case ChannelSource.Green:
-                            val = sample.g;
-                            break;
-                        case ChannelSource.Blue:
-                            val = sample.b;
-                            break;
-                        case ChannelSource.Alpha:
-                            val = sample.a;
-                            break;
-                        case ChannelSource.Mask:
-                            int r = (int)(sample.r * 255f);
-                            int g = (int)(sample.g * 255f);
-                            int b = (int)(sample.b * 255f);
-
-                            int packed = (r << 16) | (g << 8) | b;
-                            val = packed / 16777215f;
-                            break;
-                        case ChannelSource.Color:
-                            solidColor = s.color;
-                            break;
-                    }
-
-                    if (s.createType == CreateType.InverseRNS)
-                    {
-                        val = 1 - val;
-                        solidColor = new(1 - s.color.r, 1 - s.color.g, 1 - s.color.b, 1 - s.color.a);
-                    }
-
-                    if (s.source == ChannelSource.Color)
-                    {
-                        switch (s.target)
-                        {
-                            case TargetChannel.R:
-                                outC.r = solidColor.r;
-                                break;
-                            case TargetChannel.G:
-                                outC.g = solidColor.g;
-                                break;
-                            case TargetChannel.B:
-                                outC.b = solidColor.b;
-                                break;
-                            case TargetChannel.A:
-                                outC.a = solidColor.a;
-                                break;
-                        }
+                        outputFolderRelative = "Assets" + abs.Substring(Application.dataPath.Length);
                     }
                     else
                     {
-                        switch (s.target)
-                        {
-                            case TargetChannel.R:
-                                outC.r = val;
-                                break;
-                            case TargetChannel.G:
-                                outC.g = val;
-                                break;
-                            case TargetChannel.B:
-                                outC.b = val;
-                                break;
-                            case TargetChannel.A:
-                                outC.a = val;
-                                break;
-                        }   
+                        EditorUtility.DisplayDialog("Invalid folder", "Please select a folder inside this Unity project's Assets folder.", "OK");
                     }
                 }
+            }
+            EditorGUILayout.EndHorizontal();
 
-                outTex.SetPixel(x, y, outC);
+            outputFilename = EditorGUILayout.TextField("Output filename", outputFilename);
+            EditorGUILayout.BeginHorizontal();
+            outputSize = EditorGUILayout.IntField("Size", outputSize);
+            EditorGUILayout.EndHorizontal();
+
+            format = (TextureFormat)EditorGUILayout.EnumPopup("Texture write format", format, GUILayout.Width(275));
+
+            overwriteExisting = EditorGUILayout.Toggle("Overwrite existing file", overwriteExisting);
+            autoFormating = EditorGUILayout.Toggle("Auto Texture Formating", autoFormating);
+            sRGB = EditorGUILayout.Toggle("Enabling sRGB", sRGB);
+        
+
+            EditorGUILayout.Space();
+
+            if (GUILayout.Button("Pack and Save", GUILayout.Height(36)))
+            {
+                PackAndSave();
             }
         }
 
-        outTex.Apply();
-
-        byte[] png = outTex.EncodeToPNG();
-        try
+        void PackAndSave()
         {
-            string dir = Path.GetDirectoryName(fullPath);
-            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllBytes(fullPath, png);
-            AssetDatabase.Refresh();
-
-            var imp = AssetImporter.GetAtPath(assetRelativePath) as TextureImporter;
-
-            if (imp != null)
+            if (string.IsNullOrEmpty(outputFolderRelative) || !outputFolderRelative.StartsWith("Assets"))
             {
-                imp.textureType = TextureImporterType.Default;
-                imp.isReadable = false;
+                EditorUtility.DisplayDialog("Output folder error", "Please set an output folder inside the project's Assets folder.", "OK");
+                return;
+            }
+            if (string.IsNullOrEmpty(outputFilename))
+            {
+                EditorUtility.DisplayDialog("Filename error", "Please set a valid output filename (e.g. Packed.png).", "OK");
+                return;
+            }
 
-                if (autoFormating)
+            string fullPath = Path.Combine(Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length), outputFolderRelative, outputFilename);
+            string assetRelativePath = Path.Combine(outputFolderRelative, outputFilename).Replace("\\","/");
+
+            if (File.Exists(fullPath) && !overwriteExisting)
+            {
+                if (!EditorUtility.DisplayDialog("File exists", "File already exists. Overwrite?", "Yes", "No"))
+                    return;
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                var t = slots[i].texture;
+
+                if (t == null || !slots[i].enabled)
+                    continue;
+                
+                if (forceReadableTextures)
                 {
-                    byte activeSlot = 0;
+                    string texPath = AssetDatabase.GetAssetPath(t);
 
-                    for (int i = 0; i < slots.Length; i++)
+                    if (!string.IsNullOrEmpty(texPath))
                     {
-                        if (slots[i].enabled)
+                        var importer = AssetImporter.GetAtPath(texPath) as TextureImporter;
+
+                        if (importer != null)
                         {
-                            activeSlot++;
+                            if (!importer.isReadable)
+                            {
+                                importer.isReadable = true;
+                            }
+
+                            textures.Add(new TextureSettings()
+                            {
+                                textureImporter = importer,
+
+                                maxTextureSize = importer.maxTextureSize,
+                                compression = importer.textureCompression,
+                                alphaSource = importer.alphaSource,
+                                textureType = importer.textureType
+                            });
+
+                            importer.maxTextureSize = outputSize; 
+
+                            importer.textureCompression = TextureImporterCompression.Uncompressed;
+                            importer.alphaSource = TextureImporterAlphaSource.FromInput;
+                            importer.textureType = TextureImporterType.Default;
+
+                            importer.SaveAndReimport();
+                        }
+                    }
+                }
+            }
+
+            Texture2D outTex = new Texture2D(outputSize, outputSize, format, false);
+
+            for (int y = 0; y < outputSize; y++)
+            {
+                for (int x = 0; x < outputSize; x++)
+                {
+                    Color outC = new Color(0,0,0,1);
+                    float u = (outputSize > 1) ? (float)x / (outputSize - 1) : 0f;
+                    float v = (outputSize > 1) ? (float)y / (outputSize - 1) : 0f;
+
+                    for (int sIndex = 0; sIndex < 4; sIndex++)
+                    {
+                        var s = slots[sIndex];
+
+                        if (!s.enabled || s.texture == null) 
+                            continue;
+
+                        Texture2D tex = s.texture;
+
+                        Color sample = SampleTextureNormalized(tex, u, v);
+
+                        float val = 0;
+                        Color solidColor = new();
+
+                        switch (s.source)
+                        {
+                            case ChannelSource.RGB:
+                                val = Mathf.Max(sample.r + sample.g + sample.b);
+                                break;
+                            case ChannelSource.Red:
+                                val = sample.r;
+                                break;
+                            case ChannelSource.Green:
+                                val = sample.g;
+                                break;
+                            case ChannelSource.Blue:
+                                val = sample.b;
+                                break;
+                            case ChannelSource.Alpha:
+                                val = sample.a;
+                                break;
+                            case ChannelSource.Mask:
+                                int r = (int)(sample.r * 255f);
+                                int g = (int)(sample.g * 255f);
+                                int b = (int)(sample.b * 255f);
+
+                                int packed = (r << 16) | (g << 8) | b;
+                                val = packed / 16777215f;
+                                break;
+                            case ChannelSource.Color:
+                                solidColor = s.color;
+                                break;
+                        }
+
+                        if (s.createType == CreateType.InverseRNS)
+                        {
+                            val = 1 - val;
+                            solidColor = new(1 - s.color.r, 1 - s.color.g, 1 - s.color.b, 1 - s.color.a);
+                        }
+
+                        if (s.source == ChannelSource.Color)
+                        {
+                            switch (s.target)
+                            {
+                                case TargetChannel.R:
+                                    outC.r = solidColor.r;
+                                    break;
+                                case TargetChannel.G:
+                                    outC.g = solidColor.g;
+                                    break;
+                                case TargetChannel.B:
+                                    outC.b = solidColor.b;
+                                    break;
+                                case TargetChannel.A:
+                                    outC.a = solidColor.a;
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            switch (s.target)
+                            {
+                                case TargetChannel.R:
+                                    outC.r = val;
+                                    break;
+                                case TargetChannel.G:
+                                    outC.g = val;
+                                    break;
+                                case TargetChannel.B:
+                                    outC.b = val;
+                                    break;
+                                case TargetChannel.A:
+                                    outC.a = val;
+                                    break;
+                            }   
                         }
                     }
 
-                    TextureImporterFormat format = TextureImporterFormat.Automatic;
+                    outTex.SetPixel(x, y, outC);
+                }
+            }
 
-                    switch (activeSlot)
+            outTex.Apply();
+
+            byte[] png = outTex.EncodeToPNG();
+            try
+            {
+                string dir = Path.GetDirectoryName(fullPath);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllBytes(fullPath, png);
+                AssetDatabase.Refresh();
+
+                var imp = AssetImporter.GetAtPath(assetRelativePath) as TextureImporter;
+
+                if (imp != null)
+                {
+                    imp.textureType = TextureImporterType.Default;
+                    imp.isReadable = false;
+
+                    if (autoFormating)
                     {
-                        case 1: format = TextureImporterFormat.BC4; break;
-                        case 2: format = TextureImporterFormat.BC5; break;
-                        case 3: format = TextureImporterFormat.BC6H; break;
-                        case 4: format = TextureImporterFormat.BC7; break;
+                        byte activeSlot = 0;
+
+                        for (int i = 0; i < slots.Length; i++)
+                        {
+                            if (slots[i].enabled)
+                            {
+                                activeSlot++;
+                            }
+                        }
+
+                        TextureImporterFormat format = TextureImporterFormat.Automatic;
+
+                        switch (activeSlot)
+                        {
+                            case 1: format = TextureImporterFormat.BC4; break;
+                            case 2: format = TextureImporterFormat.BC5; break;
+                            case 3: format = TextureImporterFormat.BC6H; break;
+                            case 4: format = TextureImporterFormat.BC7; break;
+                        }
+
+                        imp.SetPlatformTextureSettings("Standalone", imp.maxTextureSize, format, (int)TextureCompressionQuality.Normal, false);
+                    }
+                    else
+                    {
+                        imp.textureCompression = TextureImporterCompression.Uncompressed;
                     }
 
-                    imp.SetPlatformTextureSettings("Standalone", imp.maxTextureSize, format, (int)TextureCompressionQuality.Normal, false);
-                }
-                else
-                {
-                    imp.textureCompression = TextureImporterCompression.Uncompressed;
+                    imp.sRGBTexture = sRGB;
+                    imp.SaveAndReimport();
                 }
 
-                imp.sRGBTexture = sRGB;
-                imp.SaveAndReimport();
+                for (int i = 0; i < textures.Count; i++)
+                {   
+                    TextureImporter textureImporter = textures[i].textureImporter;
+
+                    textureImporter.isReadable = true;
+
+                    textureImporter.maxTextureSize = textures[i].maxTextureSize;
+                    textureImporter.textureCompression = textures[i].compression;
+                    textureImporter.textureType = textures[i].textureType;
+                    textureImporter.alphaSource = textures[i].alphaSource;
+
+                    textureImporter.SaveAndReimport();
+                }
+
+                textures.Clear();
+
+                EditorUtility.DisplayDialog("Success", "Packed texture saved to:\n" + assetRelativePath, "OK");
             }
-
-            for (int i = 0; i < textures.Count; i++)
+            catch (System.Exception ex)
             {
-                TextureImporter textureImporter = textures[i].textureImporter;
-
-                textureImporter.isReadable = true;
-
-                textureImporter.maxTextureSize = textures[i].maxTextureSize;
-                textureImporter.textureCompression = textures[i].compression;
-                textureImporter.textureType = textures[i].textureType;
-                textureImporter.alphaSource = textures[i].alphaSource;
-
-                textureImporter.SaveAndReimport();
+                Debug.LogError("Failed to save packed texture: " + ex.Message);
+                EditorUtility.DisplayDialog("Save error", "Failed to write file: " + ex.Message, "OK");
             }
-
-            textures.Clear();
-
-            EditorUtility.DisplayDialog("Success", "Packed texture saved to:\n" + assetRelativePath, "OK");
         }
-        catch (System.Exception ex)
-        {
-            Debug.LogError("Failed to save packed texture: " + ex.Message);
-            EditorUtility.DisplayDialog("Save error", "Failed to write file: " + ex.Message, "OK");
-        }
-    }
 
-    Color SampleTextureNormalized(Texture2D tex, float u, float v)
-    {
-        if (tex == null) return Color.black;
+        Color SampleTextureNormalized(Texture2D tex, float u, float v)
+        {   
+            if (tex == null) return Color.black;
 
-        try
-        {
-            return tex.GetPixelBilinear(u, v);
+            try
+            {
+                return tex.GetPixelBilinear(u, v);
+            }
+            catch
+            {
+                return Color.black;
+            }
         }
-        catch
-        {
-            return Color.black;
-        }
-    }
 
+    }   
 }
 
 #endif
