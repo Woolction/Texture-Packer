@@ -53,14 +53,14 @@ Available options (7 total):
 
 ---
 
-RGB: combines all RGB channels into one value
+- RGB: combines all RGB channels into one value
 
-R, G, B, A: reads data from the selected channel
+- R, G, B, A: reads data from the selected channel
 
-Mask: (experimental / alpha feature)
+- Mask: (experimental / alpha feature)
 The idea was to store colors as bits, allowing up to three colors to be stored in a single channel and later decoded in a shader
 
-Color: fills the channel with a constant value (0–255)
+- Color: fills the channel with a constant value (0–255)
 
 ### Type:
 
